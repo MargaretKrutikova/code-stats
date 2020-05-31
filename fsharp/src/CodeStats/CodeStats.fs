@@ -24,7 +24,7 @@ let getStats (directoryPath : string) =
     let! ignorePatterns = GitIgnoreMatcher.readGitIgnorePatterns directoryPath
 
     let shouldIncludePath path = 
-      Path.GetRelativePath(directoryPath, path) |> GitIgnoreMatcher.shouldIgnore ignorePatterns |> not
+      Path.GetRelativePath(directoryPath, path) |> GitIgnoreMatcher.shouldIgnoreFile ignorePatterns |> not
     
     return extractFileEntries shouldIncludePath (FileSystemEntry.Directory directoryPath)
   }

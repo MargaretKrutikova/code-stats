@@ -22,3 +22,10 @@ module Matcher =
   let hasMatches (result : PatternMatchingResult) =
     result.HasMatches
 
+  let addInclude (pattern : string) (matcher : Matcher) = matcher.AddInclude(pattern)
+  let addExclude (pattern : string) (matcher : Matcher) = matcher.AddExclude(pattern)
+  
+  let apply (isNegating : bool) = 
+    match isNegating with
+    | true -> addExclude
+    | false -> addInclude

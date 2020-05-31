@@ -25,13 +25,16 @@ let private toValidGitIgnoreEntry (entry : string) =
 
 let private isNegatingPattern = String.startsWith "!"
 let private fromNegatingPattern (pattern : string) =
-  pattern.Substring(1, pattern.Length)
+  pattern.Substring(1, pattern.Length - 1)
 
 let private toGitIgnorePattern (ValidGitIgnoreEntry entry) =
   if isNegatingPattern entry then
     { Pattern = fromNegatingPattern entry; IsNegating = true }
   else 
     { Pattern = entry; IsNegating = false }
+
+let private getWildcardPattern (pattern : string) =
+  pattern + "/**"
 
 let getGitIgnorePath (directoryPath : string) : string =
   Path.Combine [| directoryPath; ".gitignore" |]
@@ -43,13 +46,13 @@ let transformToGitIgnorePatterns (lines : string seq) =
     |> Seq.map toGitIgnorePattern
     |> GitIgnorePatterns
 
-let shouldIgnoreFile (filePath : string) (GitIgnorePatterns patterns) =
+let shouldIgnoreFile (GitIgnorePatterns patterns) (filePath : string) : bool =
   let folder (matcher : Matcher) entry =
-    if entry.IsNegating then
-      matcher.AddExclude(entry.Pattern)
-    else
-      matcher.AddInclude(entry.Pattern)
-
+    let apply = Matcher.apply entry.IsNegating
+    matcher 
+    |> apply entry.Pattern 
+    |> apply (getWildcardPattern entry.Pattern)
+  
   patterns 
   |> Seq.fold folder (Matcher())
   |> Matcher.performMatch filePath
