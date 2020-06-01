@@ -1,18 +1,22 @@
 module Tests
 
-open System
 open Xunit
 open CodeStats.GitIgnoreMatcher
 
-module TestData = 
-    let gitIgnoreEntries = [
-        ""          // empty lines
-        "   "       // white spaces
-        "# comment shouldn't appear in the result"
-        "" 
-    ]
-
 // https://www.atlassian.com/git/tutorials/saving-changes/gitignore
+
+[<Fact>]
+let ``Transform patterns removes empty lines and comments`` () =
+    let (GitIgnorePatterns patterns) = transformToGitIgnorePatterns [""; "    "; "# some comment here"]
+
+    Assert.Equal(0, patterns |> Seq.length)
+
+[<Fact>]
+let ``Matches rules relative to current directory correctly`` () =
+    let patterns = transformToGitIgnorePatterns ["trace.*"]
+    
+    let shouldIgnore = shouldIgnoreFile patterns "important/trace.log"
+    Assert.True(shouldIgnore)
 
 [<Fact>]
 let ``Implements wildcard start directory pattern correctly`` () =
@@ -45,24 +49,17 @@ let ``Implements any filename wildcard pattern correctly`` () =
     Assert.Equal(["debug.log"; ".log"; "*.log"], filesToIgnore)
 
 [<Fact>]
-let ``Implements exact file negating pattern correctly`` () =
-    let patterns = transformToGitIgnorePatterns ["!a.log"]
-    
-    let shouldIgnore = shouldIgnoreFile patterns "a.log"
-    Assert.False(shouldIgnore)
-
-[<Fact>]
 let ``Implements wildcard and negating patterns together correctly`` () =
-    let patterns = transformToGitIgnorePatterns ["*.log"; "!important/*.log"]
+    let patterns = transformToGitIgnorePatterns ["*.log"; "!important.log"]
     
     let filesToIgnore = 
         ["debug.log"; "trace.log"; "important.log"; "logs/important.log"] 
         |> Seq.filter (shouldIgnoreFile patterns)
 
-    Assert.Equal(["debug.log"; "trace.log"; "important.log"], filesToIgnore)
+    Assert.Equal(["debug.log"; "trace.log";], filesToIgnore)
 
 [<Fact>]
-let ``patterns after a negating pattern re-ignore negated files`` () =
+let ``Patterns after a negating pattern re-ignore negated files`` () =
     let patterns = transformToGitIgnorePatterns ["*.log"; "!important/*.log"; "trace.*"]
     
     let filesToIgnore = 
@@ -70,3 +67,23 @@ let ``patterns after a negating pattern re-ignore negated files`` () =
         |> Seq.filter (shouldIgnoreFile patterns)
 
     Assert.Equal(["debug.log"; "important/trace.log"], filesToIgnore)
+
+[<Fact>]
+let ``Prepending a slash matches files only in the repository root`` () =
+    let patterns = transformToGitIgnorePatterns ["/debug.log"]
+    
+    let filesToIgnore = 
+        ["debug.log"; "logs/debug.log"] 
+        |> Seq.filter (shouldIgnoreFile patterns)
+
+    Assert.Equal(["debug.log"], filesToIgnore)
+
+[<Fact>]
+let ``By default, patterns match files in any directory`` () =
+    let patterns = transformToGitIgnorePatterns ["debug.log"]
+    
+    let filesToIgnore = 
+        ["debug.log"; "logs/debug.log"] 
+        |> Seq.filter (shouldIgnoreFile patterns)
+
+    Assert.Equal(["debug.log";"logs/debug.log"], filesToIgnore)
