@@ -1,69 +1,36 @@
 module CodeStats.GitIgnoreMatcher
 
 open System.IO
-open System
 open Microsoft.Extensions.FileSystemGlobbing
+open GitIgnoreUtils
 open Utils
 
 type GitIgnorePatterns = GitIgnorePatterns of patterns : GitIgnorePattern seq
 and GitIgnorePattern = {
-  Pattern : string
+  GlobPatterns : string seq
   IsNegating : bool
 }
 
 type GitIgnoreMatchResult = MatchesIgnorePattern | MatchesNegationPattern | NoMatch
 
-type private ValidGitIgnoreEntry = ValidGitIgnoreEntry of string
+let private getPatternsToMatch (entry : string) =
+  [
+    entry |> Some
+    getTrailingWildcardPattern entry |> Some
+    getStartingWildcardPattern entry
+  ] |> List.choose id
 
-let private isValidGitIgnoreEntry (entry : string) =
-  (entry.StartsWith("#") || String.IsNullOrWhiteSpace entry || entry = "!") |> not
-
-let private toValidGitIgnoreEntry (entry : string) =
-  let transformed = entry |> String.trim
-  if isValidGitIgnoreEntry transformed then 
-    ValidGitIgnoreEntry transformed |> Some
-  else 
-    None
-
-let private isNegatingPattern = String.startsWith "!"
-let fromNegatingPattern (pattern : string) =
-  pattern.Substring(1, pattern.Length - 1)
-
-let private toGitIgnorePattern (ValidGitIgnoreEntry entry) =
+let private toGitIgnorePattern (entry : string) =
   if isNegatingPattern entry then
-    { Pattern = fromNegatingPattern entry; IsNegating = true }
+    { GlobPatterns = fromNegatingPattern entry |> getPatternsToMatch; IsNegating = true }
   else 
-    { Pattern = entry; IsNegating = false }
+    { GlobPatterns = entry |> getPatternsToMatch; IsNegating = false }
 
-let private getTrailingWildcardPattern (pattern : string) =
-  pattern + "/**"
-
-let private getStartingWildcardPattern (pattern : string) =
-  if pattern |> String.startsWith "/" |> not then
-    "**/" + pattern |> Some
-  else 
-    None
-
-let getGitIgnorePath (directoryPath : string) : string =
-  Path.Combine [| directoryPath; ".gitignore" |]
-
-let transformToGitIgnorePatterns (lines : string seq) =
-    lines
-    |> Seq.map toValidGitIgnoreEntry
-    |> Seq.choose id
-    |> Seq.map toGitIgnorePattern
-    |> GitIgnorePatterns
-
-let evaluateGitIgnoreMatchResult (filePath : string) (entry : GitIgnorePattern) : GitIgnoreMatchResult =
+let private evaluateGitIgnoreMatchResult (filePath : string) (entry : GitIgnorePattern) : GitIgnoreMatchResult =
   let folder (matcher : Matcher) pattern = matcher.AddInclude(pattern)
   let matchResult = 
-    [
-      entry.Pattern |> Some
-      getTrailingWildcardPattern entry.Pattern |> Some
-      getStartingWildcardPattern entry.Pattern
-    ]
-     |> List.choose id
-     |> List.fold folder (Matcher())
+     entry.GlobPatterns
+     |> Seq.fold folder (Matcher())
      |> Matcher.performMatch filePath
 
   if matchResult.HasMatches |> not then
@@ -72,7 +39,7 @@ let evaluateGitIgnoreMatchResult (filePath : string) (entry : GitIgnorePattern) 
     MatchesNegationPattern
   else MatchesIgnorePattern
 
-let combineMatchResults (left : GitIgnoreMatchResult) (right : GitIgnoreMatchResult) : GitIgnoreMatchResult =
+let private combineMatchResults (left : GitIgnoreMatchResult) (right : GitIgnoreMatchResult) : GitIgnoreMatchResult =
   match left, right with
   | MatchesIgnorePattern, NoMatch -> MatchesIgnorePattern
   | MatchesNegationPattern, NoMatch -> MatchesNegationPattern
@@ -80,23 +47,20 @@ let combineMatchResults (left : GitIgnoreMatchResult) (right : GitIgnoreMatchRes
   | _, MatchesNegationPattern -> MatchesNegationPattern
   | NoMatch, NoMatch -> NoMatch
 
-let shouldIgnoreFile (GitIgnorePatterns patterns) (filePath : string) : bool =
+let shouldIgnoreRelativePath (GitIgnorePatterns patterns) (relativePath : string) : bool =
   let folder (matchResult : GitIgnoreMatchResult) (pattern : GitIgnorePattern) =
-    evaluateGitIgnoreMatchResult filePath pattern |> combineMatchResults matchResult
+    evaluateGitIgnoreMatchResult relativePath pattern |> combineMatchResults matchResult
 
   match patterns |> Seq.fold folder NoMatch with 
   | MatchesIgnorePattern -> true
   | MatchesNegationPattern -> false
   | NoMatch -> false
 
-let readGitIgnorePatterns (folder : string) : Async<GitIgnorePatterns> =
-  async {
-    let gitignorePath = getGitIgnorePath folder
-  
-    if not <| File.Exists gitignorePath then
-      return Seq.empty |> GitIgnorePatterns
-    else
-      let! entriesToIgnore = File.ReadAllLinesAsync gitignorePath |> Async.AwaitTask
-      return entriesToIgnore |> transformToGitIgnorePatterns
-  }
+let shouldIgnoreAbsolutePath (patterns : GitIgnorePatterns) (rootPath : string) (absolutePath : string) : bool =
+  Path.GetRelativePath(rootPath, absolutePath) |> shouldIgnoreRelativePath patterns
 
+let transformToGitIgnorePatterns (lines : string seq) =
+    lines
+    |> Seq.filter isValidGitIgnoreEntry
+    |> Seq.map toGitIgnorePattern
+    |> GitIgnorePatterns

@@ -5,11 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharpx.Async" Version="1.14.1" />
     <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="5.0.0-preview.4.20251.6" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="Utils.fs" />
+    <Compile Include="GitIgnoreUtils.fs" />
     <Compile Include="FileSystemEntry.fs" />
     <Compile Include="GitIgnoreMatcher.fs" />
     <Compile Include="CodeStats.fs" />
