@@ -1,10 +1,10 @@
-﻿open CodeStats
+open CodeStats
 
 [<EntryPoint>]
 let main argv =
-    let dirPath = ""
-    let lines = CodeStats.getStats dirPath |> Async.RunSynchronously
-    lines |> Seq.iter (printfn "%A") 
+    let codeStats = CodeStats.getStats dirPath |> Async.RunSynchronously
+
+    Map.iter (printfn "%s - %d") codeStats.FilesPerExtension
 
     printfn "Hello World from F#!"
     0 // return an integer exit code

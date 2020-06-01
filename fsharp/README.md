@@ -2,6 +2,7 @@ dotnet new sln -o CodeStats
 dotnet new classlib -lang "F#" -o src/CodeStats
 dotnet sln add src/CodeStats/CodeStats.fsproj
 dotnet add src/CodeStats/CodeStats.fsproj package Microsoft.Extensions.FileSystemGlobbing --version 3.1.4
+dotnet add src/CodeStats/CodeStats.fsproj package FSharpx.Async --version 1.14.1
 
 dotnet new console -lang "F#" -o src/App
 dotnet sln add src/App/App.fsproj
