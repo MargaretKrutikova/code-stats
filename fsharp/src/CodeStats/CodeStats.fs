@@ -40,7 +40,7 @@ let rec private extractFileEntries (parentShouldKeep : string -> bool) (FileSyst
       |> Directory.EnumerateFileSystemEntries
       |> Seq.filter (isFileEntryHidden >> not)
       |> Seq.filter combined
-      |> Seq.map FileSystemEntry.createFromPath
+      |> Seq.map FileSystemEntry.createFromPathIO
       |> Seq.choose id
       |> Seq.toList
      

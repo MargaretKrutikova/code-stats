@@ -9,5 +9,8 @@ let main argv =
     |> Seq.sortByDescending snd 
     |> Seq.iter (fun (key, count) -> printfn "%s - %d" key count)
 
+    let fileSystemTree = FileSystemTree.buildFileSystemIO dirPath |> Async.RunSynchronously
+    printfn "%A" fileSystemTree
+
     printfn "Hello World from F#!"
     0 // return an integer exit code
