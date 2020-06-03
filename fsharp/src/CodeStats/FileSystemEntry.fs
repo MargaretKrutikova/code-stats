@@ -19,8 +19,8 @@ let createFromPath (path : string) : FileSystemEntry option =
 let rec split (entries : FileSystemEntry list) =
   let folder entry (files, directories) =
     match entry with
-    | FileEntry file -> files @ [file], directories
-    | DirectoryEntry directory -> files, directories @ [directory]
+    | FileEntry file -> file :: files, directories
+    | DirectoryEntry directory -> files, directory :: directories
 
   List.foldBack folder entries ([], [])  
   

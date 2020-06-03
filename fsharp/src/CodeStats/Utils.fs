@@ -5,9 +5,9 @@ module List =
   let split (predicate : 'a -> bool) (list : 'a list) : 'a list * 'a list =
     let folder (item : 'a) ((left, right) : 'a list * 'a list) : 'a list * 'a list =
       if predicate item then
-        (left @ [item], right)
+        (item :: left, right)
       else
-        (left, right @ [item])
+        (left, item :: right)
 
     List.foldBack folder list ([], [])  
 
