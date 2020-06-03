@@ -8,13 +8,19 @@ type FileSystemEntry =
 and Directory = Directory of directoryPath: string
 and File = File of filePath: string
 
-let createFromPath (path : string) : FileSystemEntry option =
-  if path |> Directory.Exists then
+let createFromPath 
+  (fileExists : string -> bool)
+  (directoryExists : string -> bool) 
+  (path : string) : FileSystemEntry option =
+  if path |> directoryExists then
     Directory path |> DirectoryEntry |> Some
-  else if path |> File.Exists then
+  else if path |> fileExists then
     File path |> FileEntry |> Some
   else 
     None
+
+let createFromPathIO (path : string) : FileSystemEntry option =
+  createFromPath File.Exists Directory.Exists path
 
 let rec split (entries : FileSystemEntry list) =
   let folder entry (files, directories) =

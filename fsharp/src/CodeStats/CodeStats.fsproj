@@ -10,10 +10,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="Async.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="GitIgnoreUtils.fs" />
     <Compile Include="FileSystemEntry.fs" />
     <Compile Include="GitIgnoreMatcher.fs" />
+    <Compile Include="FileSystemTree.fs" />
     <Compile Include="CodeStats.fs" />
   </ItemGroup>
 
