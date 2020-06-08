@@ -12,12 +12,12 @@ type FileSystemTree = {
 let private isFileEntryHidden path =
   File.GetAttributes(path).HasFlag(FileAttributes.Hidden);
 
-let private getGitIgnorePath (directoryPath : string) : string =
-  Path.Combine [| directoryPath; ".gitignore" |]
+let private getGitIgnorePath (FileSystemEntry.Directory dirPath) : string =
+  Path.Combine [| dirPath; ".gitignore" |]
 
-let private readGitIgnorePatterns (folder : string) : Async<GitIgnorePatterns> =
+let private readGitIgnoreIO (dirEntry : FileSystemEntry.Directory) : Async<GitIgnorePatterns> =
   async {
-    let gitignorePath = getGitIgnorePath folder
+    let gitignorePath = getGitIgnorePath dirEntry
   
     if not <| File.Exists gitignorePath then
       return Seq.empty |> GitIgnorePatterns
@@ -26,23 +26,24 @@ let private readGitIgnorePatterns (folder : string) : Async<GitIgnorePatterns> =
       return entriesToIgnore |> transformToGitIgnorePatterns
   }
 
-let rec private buildDirectoryChildren 
-  (isFileHidden : string -> bool)
-  (readFolderGitIgnorePatters : string -> Async<GitIgnorePatterns>)
+let rec private traverseDirectory 
+  (readGitIgnore : FileSystemEntry.Directory -> Async<GitIgnorePatterns>)
   (createFromPath : string -> FileSystemEntry.FileSystemEntry option)
-  (parentShouldIgnore : string -> bool)
-  (FileSystemEntry.Directory rootPath) : Async<FileSystemTree list> =
+  (shouldIgnore : string -> bool)
+  (dirEntry : FileSystemEntry.Directory) : Async<FileSystemTree list> =
   async {
-    let! ignorePatterns = readFolderGitIgnorePatters rootPath
-    let currentShouldIgnore = shouldIgnoreAbsolutePath ignorePatterns rootPath
-    let shouldIgnore entry = parentShouldIgnore entry || currentShouldIgnore entry
+    let! ignorePatterns = readGitIgnore dirEntry
 
-    let createTree = createFileSystemTree shouldIgnore isFileHidden readFolderGitIgnorePatters createFromPath
+    let (FileSystemEntry.Directory dirPath) = dirEntry
+    let currentShouldIgnore = shouldIgnoreAbsolutePath ignorePatterns dirPath
+    let shouldIgnore entry = shouldIgnore entry || currentShouldIgnore entry
+
+    let createTree = createFileSystemTree shouldIgnore readGitIgnore createFromPath
     
     let tree = 
-      rootPath 
+      dirPath 
         |> Directory.EnumerateFileSystemEntries
-        |> Seq.filter (fun entry -> (isFileHidden entry || shouldIgnore entry) |> not)
+        |> Seq.filter (shouldIgnore >> not)
         |> Seq.map createFromPath
         |> Seq.choose id
         |> AsyncSeq.ofSeq
@@ -52,9 +53,8 @@ let rec private buildDirectoryChildren
     return! tree
   }
 and createFileSystemTree
-  (parentShouldIgnore : string -> bool)
-  (isFileHidden : string -> bool)
-  (readFolderGitIgnorePatters : string -> Async<GitIgnorePatterns>)
+  (shouldIgnore : string -> bool)
+  (readFolderGitIgnorePatters : FileSystemEntry.Directory -> Async<GitIgnorePatterns>)
   (createFromPath : string -> FileSystemEntry.FileSystemEntry option)
   (entry : FileSystemEntry.FileSystemEntry) : Async<FileSystemTree>
  = match entry with
@@ -62,22 +62,22 @@ and createFileSystemTree
       async { return { Entry = file; Children = Seq.empty } }
     | FileSystemEntry.DirectoryEntry directory as directoryEntry -> 
       async {
-        let! children = buildDirectoryChildren isFileHidden readFolderGitIgnorePatters createFromPath parentShouldIgnore directory
+        let! children = traverseDirectory readFolderGitIgnorePatters createFromPath shouldIgnore directory
         return { Entry = directoryEntry; Children = children }
       }
 
 let buildFileSystemTree 
   (isFileHidden : string -> bool)
-  (readFolderGitIgnorePatters : string -> Async<GitIgnorePatterns>)
+  (readFolderGitIgnorePatters : FileSystemEntry.Directory -> Async<GitIgnorePatterns>)
   (createFromPath : string -> FileSystemEntry.FileSystemEntry option)
   (directoryPath : string) : Async<FileSystemTree option> =
   async {
     match createFromPath directoryPath with
     | Some directory -> 
-      let! tree = createFileSystemTree (fun _ -> false) isFileHidden readFolderGitIgnorePatters createFromPath directory
+      let! tree = createFileSystemTree isFileHidden readFolderGitIgnorePatters createFromPath directory
       return Some tree
     | None -> return None
   }
 
 let buildFileSystemIO (directoryPath : string) : Async<FileSystemTree option> =
-  buildFileSystemTree isFileEntryHidden readGitIgnorePatterns FileSystemEntry.createFromPathIO directoryPath
+  buildFileSystemTree isFileEntryHidden readGitIgnoreIO FileSystemEntry.createFromPathIO directoryPath
